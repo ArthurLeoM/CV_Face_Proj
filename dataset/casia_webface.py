@@ -39,44 +39,69 @@ class CASIAWebFace(data.Dataset):
             label_list.append(int(label_name))
 
         self.image_list = image_list
-        self.label_list = label_list
-        self.class_nums = len(np.unique(self.label_list))
-        print("dataset size: ", len(self.image_list), '/', self.class_nums)
+        #self.label_list = label_list
+        #self.class_nums = len(np.unique(self.label_list))
+        #print("dataset size: ", len(self.image_list), '/', self.class_nums)
+        self.pairs = []
+        self.labels = []
+        for i in range(len(self.image_list)):
+            self.pairs.append((image_list[i], image_list[i]))
+            self.labels.append(1)
+            tmp_id = i
+            while (tmp_id == i):
+                tmp_id = int(np.random.randint(0, len(self.image_list)))
+            self.pairs.append((image_list[i], image_list[tmp_id]))
+            self.labels.append(0)
 
     def __getitem__(self, index):
-        img_path = self.image_list[index]
-        label = self.label_list[index]
+        img0_path, img1_path = self.pairs[index]
+        label = self.labels[index]
 
-        img = self.loader(os.path.join(self.root, img_path))
+        img0 = self.loader(os.path.join(self.root, img0_path))
+        img1 = self.loader(os.path.join(self.root, img1_path))
 
         # random flip with ratio of 0.5
-        flip = np.random.choice(2) * 2 - 1
-        if flip == 1:
-            img = cv2.flip(img, 1)
+        # flip = np.random.choice(2) * 2 - 1
+        # if flip == 1:
+        #     img = cv2.flip(img, 1)
 
         if self.transform is not None:
-            img = self.transform(img)
+            img0 = self.transform(img0)
+            img1 = self.transform(img1)
         else:
-            img = torch.from_numpy(img)
+            img0 = torch.from_numpy(img0)
+            img1 = torch.from_numpy(img1)
 
-        return img, label
+        return img0, img1, label
 
     def __len__(self):
-        return len(self.image_list)
+        return len(self.pairs)
 
 
 if __name__ == '__main__':
     root = '../CASIA-WebFace'  #'D:/data/webface_align_112'
-    file_list = 'casia_landmark.txt'
+    file_list = 'names_2000.txt'
 
-    transform = transforms.Compose([
-        transforms.Resize((112,112)),
-        transforms.ToTensor(),  # range [0, 255] -> [0.0,1.0]
-        transforms.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5))  # range [0.0, 1.0] -> [-1.0,1.0]
-        
+    # transform = transforms.Compose([
+    #     transforms.Resize((112,112)),
+    #     transforms.ToTensor(),  # range [0, 255] -> [0.0,1.0]
+    #     transforms.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5))  # range [0.0, 1.0] -> [-1.0,1.0]  
+    # ])
+    augment = transforms.RandomChoice([
+        transforms.RandomCrop(size=(64, 64)),
+        transforms.RandomHorizontalFlip(p=0.5),
+        transforms.RandomVerticalFlip(p=0.5),
+        transforms.RandomRotation(degrees=(-180, 180))
     ])
-    dataset = CASIAWebFace(root, file_list, transform=transform)
+    transform_augment = transforms.Compose([
+        transforms.ToPILImage(),
+        augment,
+        transforms.Resize((112,112)),
+        transforms.ToTensor(),  # range [0, 255] -> [0.0,1.0] 
+    ])
+    dataset = CASIAWebFace(root, file_list, transform=transform_augment)
     trainloader = data.DataLoader(dataset, batch_size=64, shuffle=True, num_workers=2, drop_last=False)
     print(len(dataset))
     for data in trainloader:
         print(data[0].shape)
+        break
